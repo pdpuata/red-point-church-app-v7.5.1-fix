@@ -2,40 +2,53 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const root = process.cwd();
-const requiredMigrations = [
-  'supabase/schema.sql',
-  'supabase/v2.6_media_upload.sql',
-  'supabase/v3.2_ministries.sql',
-  'supabase/v3.4_communication.sql',
-  'supabase/v3.9_content_health.sql',
-  'supabase/v4.0_production_readiness.sql',
-  'supabase/v4.1_qa_ux.sql',
-  'supabase/v4.7_sermon_library.sql',
-  'supabase/v4.8_leadership.sql',
-  'supabase/v4.9_contact.sql',
-  'supabase/v6.2_security_hardening.sql',
-  'supabase/migrations/20260903_000001_red_point_baseline.sql',
-  'supabase/migrations/20260903_000002_admin_rls_fix.sql',
-  'supabase/migrations/20260904_production_backend.sql',
-  'supabase/migrations/20260904_sermon_audio_source.sql',
-  'supabase/migrations/20260905_table_grants.sql',
-  'supabase/migrations/20260906_sermon_source_guid.sql'
-];
-const functions = ['register-device','send-push','submit-visitor','sync-youtube-sermons','sync-podcast-sermons'];
+const migrationDir = path.join(root, 'supabase', 'migrations');
+const requiredFunctions = ['register-device','send-push','submit-visitor','sync-youtube-sermons','sync-podcast-sermons'];
 let failures = 0;
-for (const f of requiredMigrations) {
-  if (!fs.existsSync(path.join(root, f))) { console.error(`FAIL missing migration: ${f}`); failures++; }
-  else console.log(`PASS migration: ${f}`);
+
+if (!fs.existsSync(migrationDir)) {
+  console.error('FAIL missing migration directory: supabase/migrations');
+  failures++;
+} else {
+  const migrations = fs.readdirSync(migrationDir).filter((file) => file.endsWith('.sql')).sort();
+  if (!migrations.length) {
+    console.error('FAIL no canonical SQL migrations found');
+    failures++;
+  } else {
+    console.log(`PASS migrations directory: ${migrations.length} local SQL migrations`);
+    for (const file of migrations) console.log(`PASS migration: supabase/migrations/${file}`);
+  }
 }
-for (const fn of functions) {
-  const f = `supabase/functions/${fn}/index.ts`;
-  if (!fs.existsSync(path.join(root, f))) { console.error(`FAIL missing Edge Function: ${f}`); failures++; }
-  else console.log(`PASS Edge Function: ${f}`);
+
+for (const fn of requiredFunctions) {
+  const file = `supabase/functions/${fn}/index.ts`;
+  if (!fs.existsSync(path.join(root, file))) {
+    console.error(`FAIL missing Edge Function: ${file}`);
+    failures++;
+  } else {
+    console.log(`PASS Edge Function: ${file}`);
+  }
 }
-for (const f of ['supabase/DEPLOYMENT_ORDER.md','V7.1.md','.env.example']) {
-  if (!fs.existsSync(path.join(root, f))) { console.error(`FAIL missing deployment file: ${f}`); failures++; }
-  else console.log(`PASS deployment file: ${f}`);
+
+for (const file of ['supabase/config.toml','supabase/DEPLOYMENT_ORDER.md','.env.example','package.json','app.json','eas.json']) {
+  if (!fs.existsSync(path.join(root, file))) {
+    console.error(`FAIL missing release/backend file: ${file}`);
+    failures++;
+  } else {
+    console.log(`PASS release/backend file: ${file}`);
+  }
 }
+
+if (fs.existsSync(path.join(root, 'supabase/config.toml'))) {
+  const config = fs.readFileSync(path.join(root, 'supabase/config.toml'), 'utf8');
+  for (const fn of requiredFunctions) {
+    if (!config.includes(`[functions.${fn}]`)) {
+      console.error(`FAIL config missing [functions.${fn}]`);
+      failures++;
+    }
+  }
+}
+
 if (failures) process.exit(1);
-console.log(`\nBackend structure check passed: ${requiredMigrations.length} migrations, ${functions.length} Edge Functions.`);
-console.log('This check validates project files only; it does not connect to Supabase or deploy anything.');
+console.log('\nPASS backend repository structure is internally consistent.');
+console.log('NOTE: this gate does not prove production migration parity or live deployment.');
