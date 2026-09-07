@@ -14,5 +14,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx expo-doctor
+      - run: npm run preflight
+      - run: npm run release-check
+      - run: npm run backend:check
+      - run: npm run backend:launch-gate
       - run: npm run typecheck
+      - run: npx expo-doctor
